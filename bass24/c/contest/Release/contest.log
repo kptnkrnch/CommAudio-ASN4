@@ -1,0 +1,21 @@
+﻿Build started 2014-03-29 6:17:35 PM.
+     1>Project "D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\contest\contest.vcxproj" on node 4 (build target(s)).
+     1>InitializeBuildStatus:
+         Creating ".\Release\contest.unsuccessfulbuild" because "AlwaysCreate" was specified.
+       ClCompile:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /I.. /Zi /nologo /W1 /WX- /Od /Oy- /D WIN32 /D NDEBUG /D _CONSOLE /D _VC80_UPGRADE=0x0600 /D _WINDLL /Gm- /EHsc /MD /GS /Gy- /fp:precise /Zc:wchar_t /Zc:forScope /Fo".\Release\\" /Fd".\Release\vc100.pdb" /Gd /TC /analyze- /errorReport:prompt contest.c
+         contest.c
+       Link:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:".\../bin\contest.dll" /INCREMENTAL:NO /NOLOGO kernel32.lib user32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /ManifestFile:".\Release\contest.dll.intermediate.manifest" /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /PDB:"D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\bin\contest.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\../bin\contest.lib" /MACHINE:X86 /DLL .\Release\contest.obj
+         ..\bass.lib
+         contest.vcxproj -> D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\contest\.\../bin\contest.dll
+       Manifest:
+         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\mt.exe /nologo /verbose /outputresource:".\../bin\contest.dll;#2" /manifest .\Release\contest.dll.intermediate.manifest
+       FinalizeBuildStatus:
+         Deleting file ".\Release\contest.unsuccessfulbuild".
+         Touching ".\Release\contest.lastbuildstate".
+     1>Done Building Project "D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\contest\contest.vcxproj" (build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:01.00

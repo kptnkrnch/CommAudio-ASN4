@@ -1,0 +1,24 @@
+﻿Build started 2014-03-29 6:17:35 PM.
+     1>Project "D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\dsptest\dsptest.vcxproj" on node 7 (build target(s)).
+     1>InitializeBuildStatus:
+         Creating ".\Release\dsptest.unsuccessfulbuild" because "AlwaysCreate" was specified.
+       ClCompile:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /I.. /Zi /nologo /W1 /WX- /Od /Oy- /D WIN32 /D NDEBUG /D _VC80_UPGRADE=0x0600 /D _WINDLL /Gm- /EHsc /MD /GS /Gy- /fp:precise /Zc:wchar_t /Zc:forScope /Fo".\Release\\" /Fd".\Release\vc100.pdb" /Gd /TC /analyze- /errorReport:prompt dsptest.c
+         dsptest.c
+       ResourceCompile:
+         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\rc.exe /D _VC80_UPGRADE=0x0600 /l"0x0409" /nologo /fo".\Release\dsptest.res" dsptest.rc 
+       Link:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:".\../bin\dsptest.dll" /INCREMENTAL:NO /NOLOGO kernel32.lib user32.lib comdlg32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /ManifestFile:".\Release\dsptest.dll.intermediate.manifest" /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /PDB:"D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\bin\dsptest.pdb" /SUBSYSTEM:WINDOWS /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\../bin\dsptest.lib" /MACHINE:X86 /DLL .\Release\dsptest.res
+         .\Release\dsptest.obj
+         ..\bass.lib
+         dsptest.vcxproj -> D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\dsptest\.\../bin\dsptest.dll
+       Manifest:
+         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\mt.exe /nologo /verbose /outputresource:".\../bin\dsptest.dll;#2" /manifest .\Release\dsptest.dll.intermediate.manifest
+       FinalizeBuildStatus:
+         Deleting file ".\Release\dsptest.unsuccessfulbuild".
+         Touching ".\Release\dsptest.lastbuildstate".
+     1>Done Building Project "D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\dsptest\dsptest.vcxproj" (build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:00.95

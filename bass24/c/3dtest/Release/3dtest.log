@@ -1,0 +1,24 @@
+﻿Build started 2014-03-29 6:17:35 PM.
+     1>Project "D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\3dtest\3dtest.vcxproj" on node 7 (build target(s)).
+     1>InitializeBuildStatus:
+         Creating ".\Release\3dtest.unsuccessfulbuild" because "AlwaysCreate" was specified.
+       ClCompile:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /I.. /Zi /nologo /W1 /WX- /Od /Oy- /D WIN32 /D NDEBUG /D _VC80_UPGRADE=0x0600 /D _WINDLL /Gm- /EHsc /MD /GS /Gy- /fp:precise /Zc:wchar_t /Zc:forScope /Fo".\Release\\" /Fd".\Release\vc100.pdb" /Gd /TC /analyze- /errorReport:prompt 3dtest.c
+         3dtest.c
+       ResourceCompile:
+         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\rc.exe /D _VC80_UPGRADE=0x0600 /l"0x0409" /nologo /fo".\Release\3dtest.res" 3dtest.rc 
+       Link:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:".\../bin\3dtest.dll" /INCREMENTAL:NO /NOLOGO comctl32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /ManifestFile:".\Release\3dtest.dll.intermediate.manifest" /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /PDB:"D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\bin\3dtest.pdb" /SUBSYSTEM:WINDOWS /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\../bin\3dtest.lib" /MACHINE:X86 /DLL .\Release\3dtest.res
+         .\Release\3dtest.obj
+         ..\bass.lib
+         3dtest.vcxproj -> D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\3dtest\.\../bin\3dtest.dll
+       Manifest:
+         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\mt.exe /nologo /verbose /outputresource:".\../bin\3dtest.dll;#2" /manifest .\Release\3dtest.dll.intermediate.manifest
+       FinalizeBuildStatus:
+         Deleting file ".\Release\3dtest.unsuccessfulbuild".
+         Touching ".\Release\3dtest.lastbuildstate".
+     1>Done Building Project "D:\Notes\BCIT\Semester 4\COMP4985\ASN04\bass24\c\3dtest\3dtest.vcxproj" (build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:00.79

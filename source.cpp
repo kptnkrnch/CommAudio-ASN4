@@ -42,6 +42,7 @@
 #include "bass.h"
 #include <fstream>
 #include <sstream>
+#include <WS2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -57,8 +58,9 @@
 #define MODE_SERVER 2
 #define MODE_CLIENT 1
 #define MODE_NONE   0
+#define MULTICAST_IP "239.255.255.255"
 
-TCHAR Name[] = TEXT("Assignment 02");
+TCHAR Name[] = TEXT("Comm Audio");
 char str[80] = "";
 LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
 #pragma warning (disable: 4096)
@@ -98,6 +100,9 @@ struct SocketData {
 	SOCKET * s;
 	char songname[1024];
 	HWND hwnd;
+	bool * MulticastFlag;
+	bool * MicFlag;
+	bool * Streaming;
 };
 
 struct SongData {
@@ -221,6 +226,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	DWORD error;
 	DWORD bytesReceived, flags;
 	static struct sockaddr_in addr;
+	static struct ip_mreq mcAddr; //multicast stuct
 	char dataBuffer[DATA_BUFSIZE];
 	const int value = 1;
 	static std::ofstream file;
@@ -273,11 +279,17 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 
 	static HWND listbox;
 	static HBITMAP hBitmap;
+	static bool fFlag;
+	static bool multicastFlag;
+	static bool MicFlag;
+	static bool Streaming;
 	
 	switch (Message)
 	{
 		case WM_CREATE:
 			BASS_Init(device, freq, 0, 0, NULL);
+			multicastFlag = false;
+			MicFlag = false;
 			firstRecv = true;
 			initRecv = true;
 			pktsRecv = 0;
@@ -287,6 +299,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			buttons = (HWND *)malloc(sizeof(HWND) * MAX_BUTTONS);
 			MUSIC_PLAYING = false;
 			MUSIC_PAUSED = false;
+			Streaming = false;
 			started = false;
 			songdata = (struct SongData *)malloc(sizeof(struct SongData));
 
@@ -313,6 +326,34 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 		case WM_COMMAND:
 			switch (LOWORD (wParam))
 			{
+				case IDM_MULTICAST_OFF:
+					multicastFlag = false;
+					if (mode == MODE_CLIENT) {
+						hInst = GetModuleHandle(NULL);
+						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_OFF));
+						SetMenu(hwnd, menu);
+						//InvalidateRect(hwnd, NULL, TRUE);
+					} else if (mode == MODE_SERVER) {
+						hInst = GetModuleHandle(NULL);
+						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER_MC_OFF));
+						SetMenu(hwnd, menu);
+						//InvalidateRect(hwnd, NULL, TRUE);
+					}
+				break;
+				case IDM_MULTICAST_ON:
+					multicastFlag = true;
+					if (mode == MODE_CLIENT) {
+						hInst = GetModuleHandle(NULL);
+						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_ON));
+						SetMenu(hwnd, menu);
+						//InvalidateRect(hwnd, NULL, TRUE);
+					} else if (mode == MODE_SERVER) {
+						hInst = GetModuleHandle(NULL);
+						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER_MC_ON));
+						SetMenu(hwnd, menu);
+						//InvalidateRect(hwnd, NULL, TRUE);
+					}
+				break;
 				case BTN_REFRESH:
 				break;
 				case BTN_STREAM:
@@ -324,9 +365,13 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						if (sFileData != 0) {
 							free(sFileData);
 						}
+						Streaming = true;
 						sFileData = (struct SocketData *)malloc(sizeof(struct SocketData));
 						sFileData->hwnd = hwnd;
 						sFileData->s = &server;
+						sFileData->MulticastFlag = &multicastFlag;
+						sFileData->MicFlag = &MicFlag;
+						sFileData->Streaming = &Streaming;
 						strcpy(sFileData->songname, mbsongname);
 						if (SENDFLAG && server != INVALID_SOCKET) {
 							SendFileThrd = CreateThread(NULL, 0, SendFileThread, (LPVOID)sFileData, 0, &SendFileThrdID);
@@ -366,19 +411,45 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				case ESTABLISH_CONNECT: //create client sockets
 					WSAStartup(MAKEWORD(2,2), &wsaData);
 
-					client = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
+					if (multicastFlag) {
+						client = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
 
-					addr.sin_family = AF_INET; 
-					addr.sin_addr.s_addr = inet_addr(gIP.c_str()); 
-					addr.sin_port = htons (gPort);
-					gaddr = &addr;
-					WSAAsyncSelect(client, hwnd, WM_SOCKET, FD_CONNECT | FD_WRITE | FD_READ | FD_CLOSE);
+						addr.sin_family = AF_INET; 
+						addr.sin_addr.s_addr = inet_addr(MULTICAST_IP); 
+						addr.sin_port = htons (gPort);
+						gaddr = &addr;
 
-					WSABUF buffer;
-					buffer.buf = 0;
-					buffer.len = 0;
-					WSASendTo(client, &buffer, 1, NULL, NULL, (const sockaddr *)&addr, sizeof(addr), 0, 0);
-					
+						fFlag = TRUE;
+						//set the socket opetions, yo
+						setsockopt(client, SOL_SOCKET, SO_REUSEADDR, (char *)&fFlag, sizeof(fFlag));
+						//bind the socket
+						bind(client, (struct sockaddr*) &addr, sizeof(addr));
+
+						//join the multicast group
+						mcAddr.imr_multiaddr.s_addr = inet_addr(MULTICAST_IP);
+						mcAddr.imr_interface.s_addr = INADDR_ANY;
+						setsockopt(client, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mcAddr, sizeof(mcAddr));
+
+						WSAAsyncSelect(client, hwnd, WM_SOCKET, FD_CONNECT | FD_WRITE | FD_READ | FD_CLOSE);
+
+						WSABUF buffer;
+						buffer.buf = 0;
+						buffer.len = 0;
+						//WSASendTo(client, &buffer, 1, NULL, NULL, (const sockaddr *)&addr, sizeof(addr), 0, 0);
+					} else {
+						client = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
+
+						addr.sin_family = AF_INET; 
+						addr.sin_addr.s_addr = inet_addr(gIP.c_str()); 
+						addr.sin_port = htons (gPort);
+						gaddr = &addr;
+						WSAAsyncSelect(client, hwnd, WM_SOCKET, FD_CONNECT | FD_WRITE | FD_READ | FD_CLOSE);
+
+						WSABUF buffer;
+						buffer.buf = 0;
+						buffer.len = 0;
+						WSASendTo(client, &buffer, 1, NULL, NULL, (const sockaddr *)&addr, sizeof(addr), 0, 0);
+					}
 					error = GetLastError();
 				break;
 				/*
@@ -415,7 +486,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 */
 				case IDM_CLIENT:
 					hInst = GetModuleHandle(NULL);
-					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT));
+					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_OFF));
 					SetMenu(hwnd, menu);
 					mode = MODE_CLIENT;
 					InvalidateRect(hwnd, NULL, TRUE);
@@ -426,7 +497,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 */
 				case IDM_SERVER:
 					hInst = GetModuleHandle(NULL);
-					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER));
+					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER_MC_OFF));
 					SetMenu(hwnd, menu);
 					mode = MODE_SERVER;
 					InvalidateRect(hwnd, NULL, TRUE);
@@ -496,6 +567,9 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 							closesocket(connection);
 						}
 					}
+					Streaming = false;
+					MicFlag = false;
+					multicastFlag = false;
 					mode = MODE_NONE;
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
@@ -507,21 +581,44 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				case IDM_STARTSERVER: //creates server sockets
 					WSAStartup(MAKEWORD(2,2), &wsaData);
 
-					server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+					if (multicastFlag) {
+						server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+					
+						addr.sin_family = AF_INET; 
+						addr.sin_addr.s_addr = inet_addr(INADDR_ANY); 
+						addr.sin_port = htons (gPort);
+
+						//bind
+						bind(server, (struct sockaddr*) &addr, sizeof(addr));
+
+						mcAddr.imr_multiaddr.s_addr = inet_addr("235.255.255.255");
+						mcAddr.imr_interface.s_addr = INADDR_ANY;
+						setsockopt(server, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mcAddr, sizeof(mcAddr));
+						WSAAsyncSelect(server, hwnd, WM_SOCKET, FD_WRITE | FD_READ | FD_CLOSE); //binds reading to the WM_SOCKET message number.
+						gaddr = &addr;
+					} else {
+						server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 						
-					WSAAsyncSelect(server, hwnd, WM_SOCKET, FD_WRITE | FD_READ | FD_CLOSE); //binds reading to the WM_SOCKET message number.
+						WSAAsyncSelect(server, hwnd, WM_SOCKET, FD_WRITE | FD_READ | FD_CLOSE); //binds reading to the WM_SOCKET message number.
 
-					addr.sin_family = AF_INET; 
-					addr.sin_addr.s_addr = htonl(INADDR_ANY); 
-					addr.sin_port = htons (gPort);
+						addr.sin_family = AF_INET; 
+						addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+						addr.sin_port = htons (gPort);
 
-					gaddr = &addr;
+						gaddr = &addr;
+						//binds the socket descriptor to the port
+						if (bind(server, (PSOCKADDR) &addr, sizeof(addr)) == SOCKET_ERROR)
+						{
+							printf("bind() failed with error %d\n", WSAGetLastError());
+							return 0;
+						}
+					}
 					//binds the socket descriptor to the port
-					if (bind(server, (PSOCKADDR) &addr, sizeof(addr)) == SOCKET_ERROR)
+					/*if (bind(server, (PSOCKADDR) &addr, sizeof(addr)) == SOCKET_ERROR)
 					{
 						printf("bind() failed with error %d\n", WSAGetLastError());
 						return 0;
-					}
+					}*/
 					firstRecv = true;
 					initRecv = true;
 					pktsRecv = 0;
@@ -549,7 +646,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						buffer.buf = dataBuffer;
 						buffer.len = DATA_BUFSIZE;
 						addr_len = sizeof(*gaddr);
-						WSARecvFrom(client, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
+							addr_len = sizeof(*gaddr);
+							WSARecvFrom(client, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
 						error = GetLastError();
 						if (error != 0) {
 							printf("");
@@ -578,10 +676,14 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						buffer.buf = dataBuffer;
 						buffer.len = DATA_BUFSIZE;
 						addr_len = sizeof(*gaddr);
-						WSARecvFrom(server, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
+						if (multicastFlag) {
+							
+						} else {
+							WSARecvFrom(server, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
 						
-						strcpy(mbsongname, inet_ntoa(gaddr->sin_addr));
-						printf("IP address is: %s\n", mbsongname);
+							strcpy(mbsongname, inet_ntoa(gaddr->sin_addr));
+							printf("IP address is: %s\n", mbsongname);
+						}
 					}
 				break;
 				default:
@@ -669,15 +771,43 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 	inputFile.open("input.txt", std::ios::out | std::ios::trunc);
 	std::string line;
 	gBytesSent = 0;
+	struct sockaddr_in addr;
+	bool multicastFlag = *(sData->MulticastFlag);
+	bool micFlag = *(sData->MicFlag);
+	bool running = true;
+
+
+	if (sData->MulticastFlag) {
+		addr.sin_family =      AF_INET;
+		addr.sin_addr.s_addr = inet_addr("235.255.255.255");
+		addr.sin_port =        htons(gPort);
+	}
 
 	char streamDataBuffer[4096];
-	HSTREAM streamBuffer = BASS_StreamCreateFile(FALSE, sData->songname, 0, 0, BASS_STREAM_DECODE);
+	HSTREAM streamBuffer;
+	streamBuffer = BASS_StreamCreateFile(FALSE, sData->songname, 0, 0, BASS_STREAM_DECODE);
+	//BASS_RecordInit(-1);
+	//streamBuffer = BASS_RecordStart(44100, 2, 0, 0, 0); // start recording
 	bool started = false;
 	int tPacketsSent = 0;
 	HANDLE songEvent = CreateEvent(NULL, TRUE, FALSE, TEXT("SONGSTARTED"));
 	HANDLE TimerEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("LIMITER_EVENT"));
 
-	while(BASS_ChannelIsActive(streamBuffer)) {
+	while(BASS_ChannelIsActive(streamBuffer) && running && (*(sData->Streaming))) {
+		if (micFlag == true) {
+			if (*(sData->MicFlag) == false) {
+				running = false;
+				break;
+			}
+		}
+
+		if (multicastFlag == true) {
+			if (*(sData->MulticastFlag) == false) {
+				running = false;
+				break;
+			}
+		}
+
 		DWORD readLength = BASS_ChannelGetData(streamBuffer, streamDataBuffer, 4096);
 
 		if (readLength > 0) {
@@ -686,8 +816,12 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 
 		buffer.len = readLength;
 		buffer.buf = (CHAR*)streamDataBuffer;
+		if (sData->MulticastFlag) {
+			WSASendTo(*s, &buffer, 1, &SendBytes, 0, (const sockaddr *)&addr, sizeof(addr), &ov, 0);
+		} else {
+			WSASendTo(*s, &buffer, 1, &SendBytes, 0, (const sockaddr *)gaddr, sizeof((*gaddr)), &ov, 0);
+		}
 
-		WSASendTo(*s, &buffer, 1, &SendBytes, 0, (const sockaddr *)gaddr, sizeof((*gaddr)), &ov, 0);
 		tPacketsSent++;
 		WSAWaitForMultipleEvents(EventTotal, EventArray, FALSE, WSA_INFINITE, FALSE); //waits for send to finish
 		gPktsSent += 1;
@@ -698,7 +832,7 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 		ov.hEvent = EventArray[0];
 		
 		gBytesSent += SendBytes;
-		//Sleep(8);
+		
 		SetTimer(hwnd, NULL, 10, NULL);
 		WaitForSingleObject(TimerEvent, 25);
 	}

@@ -31,15 +31,18 @@
 #define IDM_STARTSERVER					10008 //start the server listener menu button
 #define IDM_OPENFILE					10008 //menu button for opening send file dialog
 #define IDM_SENDPACKETS					10009 //menu button for opening send packet dialog
-#define IDR_CLIENT						10010 
-#define IDR_SERVER						10011
+#define IDR_CLIENT_MC_ON				10010 
+#define IDR_SERVER_MC_ON				10011
 #define IDR_MAIN						10012 
 #define CREATE_CLIENT					10013 //unused
 #define ESTABLISH_CONNECT				10014 //message to initiate a connection
 #define START_SERVER					10015 //message to start the server
 #define IDM_SENDFILEDATA				10016 //message to start send file thread
 #define IDM_LISTBOX						10017
-#define IDM_MULTICAST					10018
+#define IDM_MULTICAST_ON				10018
+#define IDM_MULTICAST_OFF				10019
+#define IDR_CLIENT_MC_OFF				10020 
+#define IDR_SERVER_MC_OFF				10021
 
 #define BTN_PLAY						2001 //Play button
 #define BTN_PAUSE						2002 //Pause button

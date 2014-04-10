@@ -8,6 +8,7 @@
 #define IDD_IPCONNECT                   102 //IP dialog
 #define IDD_SENDTEST                    104 //Send specified packets dialog
 #define IDD_SENDFILE                    105 //Send specified file dialog
+#define IDD_DIALOGLB                    106 //Send specified file dialog
 #define IDC_LIST1                       1001
 #define IDC_COMBO1                      1002
 #define IDC_PORT						1004 //port edit box
@@ -37,9 +38,12 @@
 #define ESTABLISH_CONNECT				10014 //message to initiate a connection
 #define START_SERVER					10015 //message to start the server
 #define IDM_SENDFILEDATA				10016 //message to start send file thread
+#define IDM_LISTBOX						10017
 
 #define BTN_PLAY						2001 //Play button
 #define BTN_PAUSE						2002 //Pause button
+#define BTN_REFRESH						2003 //Pause button
+#define BTN_STREAM						2004 //Pause button
 
 /*dialog box procedure prototypes*/
 BOOL CALLBACK ProtocolAndPort(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);

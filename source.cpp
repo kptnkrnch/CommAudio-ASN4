@@ -113,6 +113,7 @@ DWORD WINAPI SendFileThread(LPVOID); //Send file thread prototype
 long getDelay (SYSTEMTIME start, SYSTEMTIME end); //Function prototype for the start time end time difference calculator
 size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonCount, 
 	size_t x, size_t y, size_t width, size_t height, LPCWSTR name, size_t buttonID);
+void GetSongList(std::string songfile, HWND lbHwnd);
 
 struct sockaddr_in * gaddr = 0; //global pointer to the socket info
 
@@ -263,6 +264,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	static HANDLE TimerEvent;
 	static LPWSTR songstring;
 	static LPWSTR songstring2;
+	std::string songlist;
 
 	wchar_t songname[1024];
 	char mbsongname[1024];
@@ -300,8 +302,10 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			hInst = GetModuleHandle(NULL);
 			listbox = CreateWindow(TEXT("LISTBOX"), TEXT(""), WS_CHILD | WS_VISIBLE | LBS_STANDARD, 
 							520, 10, 250, 480, hwnd, NULL, hInst, NULL);
-			SendMessage(listbox, LB_ADDSTRING, 0, (LPARAM)songstring);
-			SendMessage(listbox, LB_ADDSTRING, 0, (LPARAM)songstring2);
+			//SendMessage(listbox, LB_ADDSTRING, 0, (LPARAM)songstring);
+			//SendMessage(listbox, LB_ADDSTRING, 0, (LPARAM)songstring2);
+			songlist = "song-list.txt";
+			GetSongList(songlist, listbox);
 			Create_Button(hwnd, lParam, &buttons, buttonCount, 550, 480, 90, 35, TEXT("refresh"),BTN_REFRESH);
 			Create_Button(hwnd, lParam, &buttons, buttonCount, 650, 480, 90, 35, TEXT("stream"),BTN_STREAM);
 			TimerEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("LIMITER_EVENT"));
@@ -751,4 +755,21 @@ size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonC
 	}
 
 	return BUTTON_ERROR;
+}
+
+void GetSongList(std::string songfile, HWND lbHwnd) {
+	std::ifstream songlist;
+	songlist = std::ifstream(songfile);
+	std::string line;
+	wchar_t *lpwstr;
+	while(!songlist.eof()) {
+		std::getline(songlist, line); 
+		line += '\0';
+		lpwstr = (wchar_t *)malloc(sizeof(wchar_t) * line.size());
+		memset(lpwstr, 0, line.size());
+		MultiByteToWideChar(CP_UTF8, NULL, line.c_str(), line.size(), lpwstr, line.size());
+		//mbstowcs(lpwstr, line.c_str(), line.size());
+		SendMessage(lbHwnd, LB_ADDSTRING, 0, (LPARAM)lpwstr);
+		free(lpwstr);
+	}
 }

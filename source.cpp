@@ -115,6 +115,8 @@ size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonC
 void GetSongList(std::string songfile, HWND lbHwnd);
 bool Disable_Buttons(HWND * buttons, size_t buttonCount);
 bool Enable_Buttons(HWND * buttons, size_t buttonCount);
+void Enable_ListBox(HWND listbox);
+void Disable_ListBox(HWND listbox);
 
 struct sockaddr_in * gaddr = 0; //global pointer to the socket info
 
@@ -224,7 +226,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	DWORD bytesReceived, flags;
 	static struct sockaddr_in addr, addr2;
 	static struct ip_mreq mcAddr; //multicast stuct
-	char dataBuffer[DATA_BUFSIZE];
+	//char dataBuffer[DATA_BUFSIZE];
+	static char * dataBuffer;
 	const int value = 1;
 	static std::ofstream file;
 	int addr_len = 0;
@@ -312,6 +315,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			ServerButtonCount = 0;
 			ClientButtonCount = 0;
 			songdata = (struct SongData *)malloc(sizeof(struct SongData));
+			dataBuffer = (char*)malloc(sizeof(char) * DATA_BUFSIZE);
 
 			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 10, 10, 70, 50, TEXT("Play"), BTN_PLAY);
 			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 90, 10, 70, 50, TEXT("Pause"), BTN_PAUSE);
@@ -338,6 +342,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 650, 480, 90, 35, TEXT("load"),BTN_LOAD);
 			Disable_Buttons(ServerButtons, ServerButtonCount);
 			Disable_Buttons(ClientButtons, ClientButtonCount);
+			Disable_ListBox(listbox);
 			TimerEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("LIMITER_EVENT"));
 		break;
 		case WM_COMMAND:
@@ -353,7 +358,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 */
 				case BTN_START_MIC:
 					MicFlag = true;
-					if (mode == MODE_CLIENT) {
+					if (mode == MODE_CLIENT && !multicastFlag) {
 						if (sFileData != 0) {
 							free(sFileData);
 						}
@@ -390,6 +395,9 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 *  Programmer: Joshua Campbell
 				 */
 				case BTN_STOP_MIC:
+					if (MicFlag) {
+						Streaming = false;
+					}
 					MicFlag = false;
 				break;
 				/*
@@ -400,6 +408,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 */
 				case IDM_MULTICAST_OFF:
 					multicastFlag = false;
+					Streaming = false;
 					if (mode == MODE_CLIENT) {
 						hInst = GetModuleHandle(NULL);
 						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_OFF));
@@ -420,16 +429,18 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 */
 				case IDM_MULTICAST_ON:
 					multicastFlag = true;
-					if (mode == MODE_CLIENT) {
-						hInst = GetModuleHandle(NULL);
-						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_ON));
-						SetMenu(hwnd, menu);
-						//InvalidateRect(hwnd, NULL, TRUE);
-					} else if (mode == MODE_SERVER) {
-						hInst = GetModuleHandle(NULL);
-						menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER_MC_ON));
-						SetMenu(hwnd, menu);
-						//InvalidateRect(hwnd, NULL, TRUE);
+					if (!Streaming) {
+						if (mode == MODE_CLIENT) {
+							hInst = GetModuleHandle(NULL);
+							menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_ON));
+							SetMenu(hwnd, menu);
+							//InvalidateRect(hwnd, NULL, TRUE);
+						} else if (mode == MODE_SERVER) {
+							hInst = GetModuleHandle(NULL);
+							menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER_MC_ON));
+							SetMenu(hwnd, menu);
+							//InvalidateRect(hwnd, NULL, TRUE);
+						}
 					}
 				break;
 				case BTN_REFRESH:
@@ -563,7 +574,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				/*
 				 *	UNUSED
 				 */
-				case IDM_SENDPACKETS: //send packet thread start
+				/*case IDM_SENDPACKETS: //send packet thread start
 					if (sData != 0) {
 						free(sData);
 					}
@@ -573,11 +584,11 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					if (SENDFLAG && client != INVALID_SOCKET) {
 						//SendPacketThrd = CreateThread(NULL, 0, SendPacketsThread, (LPVOID)sData, 0, &SendPacketThrdID);
 					}
-				break;
+				break;*/
 				/*
 				 *	UNUSED
 				 */
-				case IDM_SENDFILEDATA: //send file thread start
+				/*case IDM_SENDFILEDATA: //send file thread start
 					if (sFileData != 0) {
 						free(sFileData);
 					}
@@ -587,7 +598,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					if (SENDFLAG && client != INVALID_SOCKET) {
 						SendFileThrd = CreateThread(NULL, 0, SendFileThread, (LPVOID)sFileData, 0, &SendFileThrdID);
 					}
-				break;
+				break;*/
 				/*
 				 *	Sets the program into "CLIENT" mode.
 				 *  Changes the menu.
@@ -601,6 +612,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					mode = MODE_CLIENT;
 					Disable_Buttons(ServerButtons, ServerButtonCount);
 					Enable_Buttons(ClientButtons, ClientButtonCount);
+					Enable_ListBox(listbox);
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
 				/*
@@ -616,15 +628,16 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					mode = MODE_SERVER;
 					Disable_Buttons(ClientButtons, ClientButtonCount);
 					Enable_Buttons(ServerButtons, ServerButtonCount);
+					Enable_ListBox(listbox);
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
 				/*
 				 *	UNUSED
 				 */
-				case IDM_PROTPORT:
+				/*case IDM_PROTPORT:
 					hInst = GetModuleHandle(NULL);
 					CreateDialog(hInst, MAKEINTRESOURCE(IDD_PORTNPROT), hwnd, ProtocolAndPort);
-				break;
+				break;*/
 				/*
 				 *  Client menu option
 				 *	Used for creating the dialog box that allows us to connect to a server.
@@ -642,17 +655,17 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				/*
 				 *	UNUSED
 				 */
-				case IDM_SENDTEST:
+				/*case IDM_SENDTEST:
 					hInst = GetModuleHandle(NULL);
 					CreateDialog(hInst, MAKEINTRESOURCE(IDD_SENDTEST), hwnd, SendTestPackets);
-				break;
+				break;*/
 				/*
 				 *	UNUSED
 				 */
-				case IDM_SENDFILE:
+				/*case IDM_SENDFILE:
 					hInst = GetModuleHandle(NULL);
 					CreateDialog(hInst, MAKEINTRESOURCE(IDD_SENDFILE), hwnd, SendFile);
-				break;
+				break;*/
 				/*
 				 *	The disconnect menu option.
 				 *  Goes back to the initial programs state of having no connections.
@@ -665,6 +678,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					SetMenu(hwnd, menu);
 					Disable_Buttons(ServerButtons, ServerButtonCount);
 					Disable_Buttons(ClientButtons, ClientButtonCount);
+					Disable_ListBox(listbox);
 					if (mode == MODE_CLIENT) {
 						if (client != INVALID_SOCKET) {
 							closesocket(client);
@@ -676,6 +690,9 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						if (connection != INVALID_SOCKET) {
 							closesocket(connection);
 						}
+					}
+					if (sFileData != 0) {
+						free(sFileData);
 					}
 					Streaming = false;
 					MicFlag = false;
@@ -862,6 +879,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			if (sFileData != 0) {
 				free(sFileData);
 			}
+			free(ServerButtons);
+			free(ClientButtons);
       		PostQuitMessage (0);
 			free(songdata);
 			BASS_Free();
@@ -1128,6 +1147,14 @@ bool Enable_Buttons(HWND * buttons, size_t buttonCount) {
 	}
 
 	return true;
+}
+
+void Enable_ListBox(HWND listbox) {
+	ShowWindow(listbox, SW_SHOW);
+}
+
+void Disable_ListBox(HWND listbox) {
+	ShowWindow(listbox, SW_HIDE);
 }
 
 /*------------------------------------------------------------------------------------------------------------------

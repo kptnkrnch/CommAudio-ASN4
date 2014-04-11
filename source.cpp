@@ -58,7 +58,7 @@
 #define MODE_SERVER 2
 #define MODE_CLIENT 1
 #define MODE_NONE   0
-#define MULTICAST_IP "239.255.255.255"
+#define MULTICAST_IP "234.5.6.7"
 
 TCHAR Name[] = TEXT("Comm Audio");
 char str[80] = "";
@@ -225,7 +225,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	WSABUF buffer;
 	DWORD error;
 	DWORD bytesReceived, flags;
-	static struct sockaddr_in addr;
+	static struct sockaddr_in addr, addr2;
 	static struct ip_mreq mcAddr; //multicast stuct
 	char dataBuffer[DATA_BUFSIZE];
 	const int value = 1;
@@ -279,10 +279,13 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 
 	static HWND listbox;
 	static HBITMAP hBitmap;
-	static bool fFlag;
+	static bool fFlag, bFlag;
 	static bool multicastFlag;
 	static bool MicFlag;
 	static bool Streaming;
+
+	int nIP_TTL=2;
+						DWORD cbRet;
 	
 	switch (Message)
 	{
@@ -412,11 +415,17 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					WSAStartup(MAKEWORD(2,2), &wsaData);
 
 					if (multicastFlag) {
-						client = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
+						client = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_MULTIPOINT_C_LEAF  
+              | WSA_FLAG_MULTIPOINT_D_LEAF| WSA_FLAG_OVERLAPPED);
 
 						addr.sin_family = AF_INET; 
-						addr.sin_addr.s_addr = inet_addr(MULTICAST_IP); 
+						addr.sin_addr.s_addr = INADDR_ANY; 
 						addr.sin_port = htons (gPort);
+
+						addr2.sin_family = AF_INET; 
+						addr2.sin_addr.s_addr = inet_addr(MULTICAST_IP);; 
+						addr2.sin_port = htons (gPort);
+
 						gaddr = &addr;
 
 						fFlag = TRUE;
@@ -424,13 +433,24 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						setsockopt(client, SOL_SOCKET, SO_REUSEADDR, (char *)&fFlag, sizeof(fFlag));
 						//bind the socket
 						bind(client, (struct sockaddr*) &addr, sizeof(addr));
-
+						memset(&mcAddr, 0, sizeof(mcAddr));
 						//join the multicast group
 						mcAddr.imr_multiaddr.s_addr = inet_addr(MULTICAST_IP);
 						mcAddr.imr_interface.s_addr = INADDR_ANY;
-						setsockopt(client, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mcAddr, sizeof(mcAddr));
+						//setsockopt(client, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mcAddr, sizeof(mcAddr));
 
-						WSAAsyncSelect(client, hwnd, WM_SOCKET, FD_CONNECT | FD_WRITE | FD_READ | FD_CLOSE);
+						
+						WSAIoctl(client,SIO_MULTICAST_SCOPE, &nIP_TTL,sizeof(nIP_TTL),NULL,0,&cbRet,NULL,NULL);
+
+
+						bFlag=FALSE;
+						WSAIoctl(client,SIO_MULTIPOINT_LOOPBACK, &bFlag,sizeof(bFlag),NULL,0,&cbRet,NULL,NULL);
+
+						
+
+						WSAAsyncSelect(client, hwnd, WM_SOCKET, FD_WRITE | FD_READ | FD_CLOSE);
+
+						WSAJoinLeaf(client, (SOCKADDR *)&addr2,sizeof(addr2),NULL,NULL,NULL,NULL,JL_BOTH);
 
 						WSABUF buffer;
 						buffer.buf = 0;
@@ -582,7 +602,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					WSAStartup(MAKEWORD(2,2), &wsaData);
 
 					if (multicastFlag) {
-						server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+						server = socket(AF_INET, SOCK_DGRAM, 0);
 					
 						addr.sin_family = AF_INET; 
 						addr.sin_addr.s_addr = inet_addr(INADDR_ANY); 
@@ -594,7 +614,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						mcAddr.imr_multiaddr.s_addr = inet_addr("235.255.255.255");
 						mcAddr.imr_interface.s_addr = INADDR_ANY;
 						setsockopt(server, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mcAddr, sizeof(mcAddr));
-						WSAAsyncSelect(server, hwnd, WM_SOCKET, FD_WRITE | FD_READ | FD_CLOSE); //binds reading to the WM_SOCKET message number.
+						WSAAsyncSelect(server, hwnd, WM_SOCKET, FD_READ | FD_CLOSE); //binds reading to the WM_SOCKET message number.
 						gaddr = &addr;
 					} else {
 						server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -613,12 +633,6 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 							return 0;
 						}
 					}
-					//binds the socket descriptor to the port
-					/*if (bind(server, (PSOCKADDR) &addr, sizeof(addr)) == SOCKET_ERROR)
-					{
-						printf("bind() failed with error %d\n", WSAGetLastError());
-						return 0;
-					}*/
 					firstRecv = true;
 					initRecv = true;
 					pktsRecv = 0;
@@ -646,8 +660,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						buffer.buf = dataBuffer;
 						buffer.len = DATA_BUFSIZE;
 						addr_len = sizeof(*gaddr);
-							addr_len = sizeof(*gaddr);
-							WSARecvFrom(client, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
+						WSARecvFrom(client, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
 						error = GetLastError();
 						if (error != 0) {
 							printf("");
@@ -779,7 +792,7 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 
 	if (sData->MulticastFlag) {
 		addr.sin_family =      AF_INET;
-		addr.sin_addr.s_addr = inet_addr("235.255.255.255");
+		addr.sin_addr.s_addr = inet_addr(MULTICAST_IP);
 		addr.sin_port =        htons(gPort);
 	}
 
@@ -816,8 +829,10 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 
 		buffer.len = readLength;
 		buffer.buf = (CHAR*)streamDataBuffer;
-		if (sData->MulticastFlag) {
-			WSASendTo(*s, &buffer, 1, &SendBytes, 0, (const sockaddr *)&addr, sizeof(addr), &ov, 0);
+		if (multicastFlag) {
+			int errorcode;
+			errorcode = WSASendTo(*s, &buffer, 1, &SendBytes, 0, (const sockaddr *)&addr, sizeof(addr), &ov, 0);
+			printf("");
 		} else {
 			WSASendTo(*s, &buffer, 1, &SendBytes, 0, (const sockaddr *)gaddr, sizeof((*gaddr)), &ov, 0);
 		}
@@ -833,7 +848,7 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 		
 		gBytesSent += SendBytes;
 		
-		SetTimer(hwnd, NULL, 10, NULL);
+		SetTimer(hwnd, NULL, 9, NULL);
 		WaitForSingleObject(TimerEvent, 25);
 	}
  	inputFile.close();

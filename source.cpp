@@ -1,33 +1,27 @@
 /*------------------------------------------------------------------------------------------------------------------
--- SOURCE FILE: source.cpp - An application that allows the user to send data or files via TCP or UDP.
---							 Displays statistics regarding the transfers.
+-- SOURCE FILE: source.cpp - An application that allows a user to stream song audio or recorded voice audio to
+--							 the client or server.
 --
--- PROGRAM: TCP/UDP test tool
+-- PROGRAM: Audio Streaming Application
 --
 -- FUNCTIONS:
 -- int WINAPI WinMain (HINSTANCE hInst, HINSTANCE hprevInstance, LPSTR lspszCmdParam, int nCmdShow)
 -- LRESULT CALLBACK WndProc (HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
--- DWORD WINAPI SendPacketsThread(LPVOID)
 -- DWORD WINAPI SendFileThread(LPVOID)
 -- long getDelay (SYSTEMTIME start, SYSTEMTIME end)
--- BOOL CALLBACK ProtocolAndPort(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 -- BOOL CALLBACK IPConnect(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
--- BOOL CALLBACK SendTestPackets(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
--- BOOL CALLBACK SendFile(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 --
 --
--- DATE: February 1, 2014
+-- DATE: April 10, 2014
 --
 -- REVISIONS: None
 --
 -- DESIGNER: Joshua Campbell
 --
--- PROGRAMMER: Joshua Campbell
+-- PROGRAMMER: Joshua Campbell, Ian Davidson
 --
 -- NOTES:
--- The program requires some simple formatting to be used properly.
--- The menu items bring up dialog boxes for text entry.
--- All retrieved data will be output to a file called "data.txt"
+-- The program requires there be at least one server and one client.
 ----------------------------------------------------------------------------------------------------------------------*/
 
 #define STRICT
@@ -188,25 +182,26 @@ int WINAPI WinMain (HINSTANCE hInst, HINSTANCE hprevInstance,
 /*------------------------------------------------------------------------------------------------------------------
 -- FUNCTION: WndProc
 --
--- DATE: February 1, 2014
+-- DATE: April 10, 2014
 --
 -- REVISIONS: none
 --
 -- DESIGNER: Joshua Campbell
 --
--- PROGRAMMER: Joshua Campbell
+-- PROGRAMMER: Joshua Campbell, Ian Davidson
 --
 -- RETURNS: False or 0
 --
 -- NOTES:
 -- The main procedure for the application. 
--- Handles the various menu options and their functionality.
--- Handles creating client send threads.
--- Handles processing and displaying statistics.
--- Handles creating receiving UDP/TCP sockets
--- Handles creating sending UDP/TCP sockets
--- Handles placing received data in a file.
--- Handles receiving data via TCP/UDP
+-- Handles setting Server/Client mode.
+-- Handles creating streaming threads.
+-- Handles receiving data.
+-- Handles creating and maintaining the GUI.
+-- Handles creating the various socket types.
+-- Handles setting and maintaining various flags such as whether it is in multicast mode or microphone mode.
+-- Handles processing the timer event that artificially slows down the send speed so as to not overflow the
+-- winsock buffer.
 ----------------------------------------------------------------------------------------------------------------------*/
 LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
                           WPARAM wParam, LPARAM lParam)
@@ -292,6 +287,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	
 	switch (Message)
 	{
+		/*
+		 *  Handles initializing any variables.
+		 *  Handles creating buttons for the server mode and client mode.
+		 *  Designer:   Joshua Campbell
+		 *  Programmer: Joshua Campbell
+		 */
 		case WM_CREATE:
 			BASS_Init(device, freq, 0, 0, NULL);
 			multicastFlag = false;
@@ -344,6 +345,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			{
 				case BTN_LOAD:
 				break;
+				/*
+				 *  Starts the streaming thread in microphone mode.
+				 *  Handles whether you are the server or client by passing in the appropriate socket.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
+				 */
 				case BTN_START_MIC:
 					MicFlag = true;
 					if (mode == MODE_CLIENT) {
@@ -376,9 +383,21 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						}
 					}
 				break;
+				/*
+				 *  Turns mic streaming off. 
+				 *  Sets a flag that kills the streaming thread if it is running.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
+				 */
 				case BTN_STOP_MIC:
 					MicFlag = false;
 				break;
+				/*
+				 *  Turns the multicasting flag off.
+				 *  Loads the new appropriate menu to turn on multicasting.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
+				 */
 				case IDM_MULTICAST_OFF:
 					multicastFlag = false;
 					if (mode == MODE_CLIENT) {
@@ -393,6 +412,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						//InvalidateRect(hwnd, NULL, TRUE);
 					}
 				break;
+				/*
+				 *  Turns the multicasting flag on.
+				 *  Loads the new appropriate menu to turn off multicasting.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
+				 */
 				case IDM_MULTICAST_ON:
 					multicastFlag = true;
 					if (mode == MODE_CLIENT) {
@@ -411,6 +436,11 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					//Disable_Buttons(buttons, buttonCount);
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
+				/*
+				 *  Starts the audio streaming thread.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
+				 */
 				case BTN_STREAM:
 					if (mode == MODE_SERVER) {
 						lbIndex = SendMessage(listbox, LB_GETCURSEL, 0, 0);
@@ -435,6 +465,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				break;
 				/*
 				 *	Play the song.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
 				 */
 				case BTN_PLAY:
 					if (!MUSIC_PLAYING && !MUSIC_PAUSED) {
@@ -449,6 +481,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				break;
 				/*
 				 *	Pause the playback of the song.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
 				 */
 				case BTN_PAUSE:
 					if (MUSIC_PLAYING && !MUSIC_PAUSED) {
@@ -462,6 +496,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				break;
 				/*
 				 *	Creates the client socket and attempts to connect to the server.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell and Ian Davidson
 				 */
 				case ESTABLISH_CONNECT: //create client sockets
 					WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -539,7 +575,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					}
 				break;
 				/*
-				 *	Creates the "SendFileThread", this is currently used for streaming data.
+				 *	UNUSED
 				 */
 				case IDM_SENDFILEDATA: //send file thread start
 					if (sFileData != 0) {
@@ -555,6 +591,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				/*
 				 *	Sets the program into "CLIENT" mode.
 				 *  Changes the menu.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
 				 */
 				case IDM_CLIENT:
 					hInst = GetModuleHandle(NULL);
@@ -568,6 +606,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				/*
 				 *	Sets the program into "SERVER" mode.
 				 *  Changes the menu.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
 				 */
 				case IDM_SERVER:
 					hInst = GetModuleHandle(NULL);
@@ -579,9 +619,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
 				/*
-				 *	Creates a dialog box for creating the protocol and port.
-				 *  Protocol is now only UDP so that does not matter.
-				 *  Port still matters.
+				 *	UNUSED
 				 */
 				case IDM_PROTPORT:
 					hInst = GetModuleHandle(NULL);
@@ -590,6 +628,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				/*
 				 *  Client menu option
 				 *	Used for creating the dialog box that allows us to connect to a server.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
 				 */
 				case IDM_CONNECT:
 					if (multicastFlag) {
@@ -607,29 +647,17 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					CreateDialog(hInst, MAKEINTRESOURCE(IDD_SENDTEST), hwnd, SendTestPackets);
 				break;
 				/*
-				 *	Creates the send file dialog box. No file necessary, this is the current trigger for
-				 *  sending the song. Just press send. Need to create a real send thing from the server.
+				 *	UNUSED
 				 */
 				case IDM_SENDFILE:
 					hInst = GetModuleHandle(NULL);
 					CreateDialog(hInst, MAKEINTRESOURCE(IDD_SENDFILE), hwnd, SendFile);
 				break;
 				/*
-				 *	Test menu option for controlling the list box of songs.
-				 */
-				case IDM_LISTBOX:
-					//hInst = GetModuleHandle(NULL);
-					//CreateDialog(hInst, MAKEINTRESOURCE(IDD_DIALOGLB), hwnd, SendFile);
-					lbIndex = SendMessage(listbox, LB_GETCURSEL, 0, 0);
-					lbCount = SendMessage(listbox, LB_GETTEXTLEN, 0, 0);
-
-					SendMessage(listbox, LB_GETTEXT, lbIndex, (LPARAM)songname);
-
-					printf("");
-				break;
-				/*
 				 *	The disconnect menu option.
 				 *  Goes back to the initial programs state of having no connections.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
 				 */
 				case IDM_DISCONNECT:
 					hInst = GetModuleHandle(NULL);
@@ -657,8 +685,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				break;
 				/*
 				 *	Menu option for starting the server.
-				 *  Currently the server receives data and doesn't send.
-				 *  We need to change that.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell and Ian Davidson
 				 */
 				case IDM_STARTSERVER: //creates server sockets
 					WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -706,6 +734,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 		 *	WM_SOCKET is triggered whenever there is a read event.
 		 *  This lets the program know that there is data in the winsock buffer that can be read.
 		 *  WM_SOCKET is a defined number (at the top of the program) that is bound to the WSAAsyncSelect function.
+		 *  Designer:   Joshua Campbell
+		 *  Programmer: Joshua Campbell
 		 */
 		case WM_SOCKET:
 			switch(WSAGETSELECTEVENT(lParam)) {
@@ -716,6 +746,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				break;
 				case FD_CLOSE:
 				break;
+				/*
+				 * The main receiving section for both client and server. Receives UDP packets and stores them
+				 * in the BASS stream.
+				 *  Designer:   Joshua Campbell
+				 *  Programmer: Joshua Campbell
+				 */
 				case FD_READ: //triggers when there is data to read
 					if (mode == MODE_CLIENT) {
 						flags = 0;
@@ -794,11 +830,18 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				break;
 			}
 		break;
+		/*
+		 *  Used for artificially limiting the send rate of the streaming thread.
+		 *  Designer:   Joshua Campbell
+		 *  Programmer: Joshua Campbell
+		 */
 		case WM_TIMER:
 			SetEvent(TimerEvent);
 		break;
 		/*	
 		 *	Handles cleaning up sockets and malloced memory.
+		 *  Designer:   Joshua Campbell
+		 *  Programmer: Joshua Campbell
 		 */
 		case WM_DESTROY:	// Terminate program and freeing data and sockets
 			if (client != INVALID_SOCKET) {
@@ -838,21 +881,20 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 /*------------------------------------------------------------------------------------------------------------------
 -- FUNCTION: SendFileThread
 --
--- DATE: February 9, 2014
+-- DATE: April 10, 2014
 --
 -- REVISIONS: none
 --
 -- DESIGNER: Joshua Campbell
 --
--- PROGRAMMER: Joshua Campbell
+-- PROGRAMMER: Joshua Campbell and Ian Davidson
 --
--- PARAM: LPVOID n - pointer to the SocketData structure containing the socket descriptor and the handle to the parent
-                     window that needs to be refreshed.
+-- PARAM: LPVOID n - pointer to the SocketData structure containing the socket descriptor and other flags.
 --
 -- RETURNS: DWORD
 --
 -- NOTES:
--- Thread for sending a file via TCP or UDP
+-- Thread for streaming either Microphone or audio data over UDP
 ----------------------------------------------------------------------------------------------------------------------*/
 DWORD WINAPI SendFileThread(LPVOID n) {
 	struct SocketData * sData = (struct SocketData *)n;
@@ -983,7 +1025,33 @@ long getDelay (SYSTEMTIME start, SYSTEMTIME end)
 	return(d);
 }
 
-/*Creates a new button such as Pause, Play, etc.*/
+/*------------------------------------------------------------------------------------------------------------------
+-- FUNCTION: Create_Button
+--
+-- DATE: April 9, 2014
+--
+-- REVISIONS: none
+--
+-- DESIGNER: Joshua Campbell
+--
+-- PROGRAMMER: Joshua Campbell
+--
+-- PARAM: HWND & hwnd - The parent window handle
+--		  LPARAM lParam - contains the hInstance
+--		  HWND ** buttons - the list of buttons where the new button is going to be created
+--		  size_t &buttonCount - the current amount of buttons in the button list
+--		  size_t x - the x coordinate of the new button
+--		  size_t y - the y coordinate of the new button
+--        size_t width - the width of the new button
+--		  size_t height - the height of the new button
+--		  LPCWSTR name - the text of the button
+--		  size_t buttonID - the WM_COMMAND sub message for the button to trigger
+--
+-- RETURNS: size_t
+--
+-- NOTES:
+-- Creates a new button.
+----------------------------------------------------------------------------------------------------------------------*/
 size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonCount, 
 	size_t x, size_t y, size_t width, size_t height, LPCWSTR name, size_t buttonID) {
 	if (buttonCount < MAX_BUTTONS) {
@@ -1002,6 +1070,25 @@ size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonC
 	return BUTTON_ERROR;
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+-- FUNCTION: Disable_Button
+--
+-- DATE: April 10, 2014
+--
+-- REVISIONS: none
+--
+-- DESIGNER: Joshua Campbell
+--
+-- PROGRAMMER: Joshua Campbell
+--
+-- PARAM: HWND * buttons - the buttons that are going to be hidden
+--		  size_t buttonCount - the number of buttons to hide
+--
+-- RETURNS: bool
+--
+-- NOTES:
+-- Hides a list of buttons
+----------------------------------------------------------------------------------------------------------------------*/
 bool Disable_Buttons(HWND * buttons, size_t buttonCount) {
 	size_t tempButtonCount = buttonCount;
 	size_t i = 0;
@@ -1013,6 +1100,25 @@ bool Disable_Buttons(HWND * buttons, size_t buttonCount) {
 	return true;
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+-- FUNCTION: Enable_Button
+--
+-- DATE: April 10, 2014
+--
+-- REVISIONS: none
+--
+-- DESIGNER: Joshua Campbell
+--
+-- PROGRAMMER: Joshua Campbell
+--
+-- PARAM: HWND * buttons - the buttons that are going to be revealed
+--		  size_t buttonCount - the number of buttons to reveal
+--
+-- RETURNS: bool
+--
+-- NOTES:
+-- Reveals a list of buttons
+----------------------------------------------------------------------------------------------------------------------*/
 bool Enable_Buttons(HWND * buttons, size_t buttonCount) {
 	size_t tempButtonCount = buttonCount;
 	size_t i = 0;
@@ -1024,6 +1130,25 @@ bool Enable_Buttons(HWND * buttons, size_t buttonCount) {
 	return true;
 }
 
+/*------------------------------------------------------------------------------------------------------------------
+-- FUNCTION: GetSongList
+--
+-- DATE: April 10, 2014
+--
+-- REVISIONS: none
+--
+-- DESIGNER: Joshua Campbell
+--
+-- PROGRAMMER: Joshua Campbell
+--
+-- PARAM: string songfile - the file containing the list of available songs
+--		  HWND lbHwnd - the list box that contains the songs in the GUI
+--
+-- RETURNS: void
+--
+-- NOTES:
+-- Retrieves the list of available songs from the song list file and adds them to the song listbox.
+----------------------------------------------------------------------------------------------------------------------*/
 void GetSongList(std::string songfile, HWND lbHwnd) {
 	std::ifstream songlist;
 	songlist = std::ifstream(songfile);

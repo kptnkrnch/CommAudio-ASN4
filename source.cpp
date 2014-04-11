@@ -53,7 +53,7 @@
 #define DEFNUMP 10
 #define DATA_BUFSIZE 65000
 
-#define MAX_BUTTONS 3
+#define MAX_BUTTONS 50
 #define BUTTON_ERROR 0
 #define MODE_SERVER 2
 #define MODE_CLIENT 1
@@ -119,6 +119,8 @@ long getDelay (SYSTEMTIME start, SYSTEMTIME end); //Function prototype for the s
 size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonCount, 
 	size_t x, size_t y, size_t width, size_t height, LPCWSTR name, size_t buttonID);
 void GetSongList(std::string songfile, HWND lbHwnd);
+bool Disable_Buttons(HWND * buttons, size_t buttonCount);
+bool Enable_Buttons(HWND * buttons, size_t buttonCount);
 
 struct sockaddr_in * gaddr = 0; //global pointer to the socket info
 
@@ -243,9 +245,10 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	static struct SocketData * sData;
 	static struct SocketData * sFileData;
 	
-	static HWND * buttons;
-	static size_t buttonCount = 0;
-	static size_t buttonIDs[MAX_BUTTONS];
+	static HWND * ServerButtons;
+	static size_t ServerButtonCount;
+	static HWND * ClientButtons;
+	static size_t ClientButtonCount;
 
 	int device = -1;
 	int errorBass = 0;
@@ -285,7 +288,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 	static bool Streaming;
 
 	int nIP_TTL=2;
-						DWORD cbRet;
+	DWORD cbRet;
 	
 	switch (Message)
 	{
@@ -299,21 +302,26 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			gHwnd = &hwnd;
 			sData = 0;
 			totalBytesRecv = 0;
-			buttons = (HWND *)malloc(sizeof(HWND) * MAX_BUTTONS);
+			ServerButtons = (HWND *)malloc(sizeof(HWND) * MAX_BUTTONS);
+			ClientButtons = (HWND *)malloc(sizeof(HWND) * MAX_BUTTONS);
 			MUSIC_PLAYING = false;
 			MUSIC_PAUSED = false;
 			Streaming = false;
 			started = false;
+			ServerButtonCount = 0;
+			ClientButtonCount = 0;
 			songdata = (struct SongData *)malloc(sizeof(struct SongData));
 
-			Create_Button(hwnd, lParam, &buttons, buttonCount, 10, 10, 70, 50, TEXT("Play"), BTN_PLAY);
-			Create_Button(hwnd, lParam, &buttons, buttonCount, 90, 10, 70, 50, TEXT("Pause"), BTN_PAUSE);
+			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 10, 10, 70, 50, TEXT("Play"), BTN_PLAY);
+			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 90, 10, 70, 50, TEXT("Pause"), BTN_PAUSE);
+			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 10, 100, 150, 50, TEXT("Start MIC Stream"), BTN_START_MIC);
+			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 160, 100, 150, 50, TEXT("Stop MIC Stream"), BTN_STOP_MIC);
+
+			Create_Button(hwnd, lParam, &ServerButtons, ServerButtonCount, 10, 10, 150, 50, TEXT("Start MIC Stream"), BTN_START_MIC);
+			Create_Button(hwnd, lParam, &ServerButtons, ServerButtonCount, 160, 10, 150, 50, TEXT("Stop MIC Stream"), BTN_STOP_MIC);
 			songEvent = CreateEvent(NULL, TRUE, FALSE, TEXT("SONGSTARTED"));
 
 			streamHandle = BASS_StreamCreate(freq, 2, 0, STREAMPROC_PUSH, 0);
-			//strcpy(songstring, "A Proper Story.mp3");
-			songstring = TEXT("A Proper Story.mp3");
-			songstring2 = TEXT("Soviet Connection.mp3");
 			songdata->songHandle = &streamHandle;
 			hInst = GetModuleHandle(NULL);
 			listbox = CreateWindow(TEXT("LISTBOX"), TEXT(""), WS_CHILD | WS_VISIBLE | LBS_STANDARD, 
@@ -322,13 +330,55 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 			//SendMessage(listbox, LB_ADDSTRING, 0, (LPARAM)songstring2);
 			songlist = "song-list.txt";
 			GetSongList(songlist, listbox);
-			Create_Button(hwnd, lParam, &buttons, buttonCount, 550, 480, 90, 35, TEXT("refresh"),BTN_REFRESH);
-			Create_Button(hwnd, lParam, &buttons, buttonCount, 650, 480, 90, 35, TEXT("stream"),BTN_STREAM);
+			Create_Button(hwnd, lParam, &ServerButtons, ServerButtonCount, 550, 480, 90, 35, TEXT("refresh"),BTN_REFRESH);
+			Create_Button(hwnd, lParam, &ServerButtons, ServerButtonCount, 650, 480, 90, 35, TEXT("stream"),BTN_STREAM);
+
+			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 550, 480, 90, 35, TEXT("refresh"),BTN_REFRESH);
+			Create_Button(hwnd, lParam, &ClientButtons, ClientButtonCount, 650, 480, 90, 35, TEXT("load"),BTN_LOAD);
+			Disable_Buttons(ServerButtons, ServerButtonCount);
+			Disable_Buttons(ClientButtons, ClientButtonCount);
 			TimerEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("LIMITER_EVENT"));
 		break;
 		case WM_COMMAND:
 			switch (LOWORD (wParam))
 			{
+				case BTN_LOAD:
+				break;
+				case BTN_START_MIC:
+					MicFlag = true;
+					if (mode == MODE_CLIENT) {
+						if (sFileData != 0) {
+							free(sFileData);
+						}
+						Streaming = true;
+						sFileData = (struct SocketData *)malloc(sizeof(struct SocketData));
+						sFileData->hwnd = hwnd;
+						sFileData->s = &client;
+						sFileData->MulticastFlag = &multicastFlag;
+						sFileData->MicFlag = &MicFlag;
+						sFileData->Streaming = &Streaming;
+						if (SENDFLAG && client != INVALID_SOCKET) {
+							SendFileThrd = CreateThread(NULL, 0, SendFileThread, (LPVOID)sFileData, 0, &SendFileThrdID);
+						}
+					} else if (mode == MODE_SERVER) {
+						if (sFileData != 0) {
+							free(sFileData);
+						}
+						Streaming = true;
+						sFileData = (struct SocketData *)malloc(sizeof(struct SocketData));
+						sFileData->hwnd = hwnd;
+						sFileData->s = &server;
+						sFileData->MulticastFlag = &multicastFlag;
+						sFileData->MicFlag = &MicFlag;
+						sFileData->Streaming = &Streaming;
+						if (SENDFLAG && server != INVALID_SOCKET) {
+							SendFileThrd = CreateThread(NULL, 0, SendFileThread, (LPVOID)sFileData, 0, &SendFileThrdID);
+						}
+					}
+				break;
+				case BTN_STOP_MIC:
+					MicFlag = false;
+				break;
 				case IDM_MULTICAST_OFF:
 					multicastFlag = false;
 					if (mode == MODE_CLIENT) {
@@ -358,6 +408,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					}
 				break;
 				case BTN_REFRESH:
+					//Disable_Buttons(buttons, buttonCount);
+					InvalidateRect(hwnd, NULL, TRUE);
 				break;
 				case BTN_STREAM:
 					if (mode == MODE_SERVER) {
@@ -416,7 +468,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 
 					if (multicastFlag) {
 						client = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_MULTIPOINT_C_LEAF  
-              | WSA_FLAG_MULTIPOINT_D_LEAF| WSA_FLAG_OVERLAPPED);
+											| WSA_FLAG_MULTIPOINT_D_LEAF| WSA_FLAG_OVERLAPPED);
 
 						addr.sin_family = AF_INET; 
 						addr.sin_addr.s_addr = INADDR_ANY; 
@@ -509,6 +561,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_CLIENT_MC_OFF));
 					SetMenu(hwnd, menu);
 					mode = MODE_CLIENT;
+					Disable_Buttons(ServerButtons, ServerButtonCount);
+					Enable_Buttons(ClientButtons, ClientButtonCount);
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
 				/*
@@ -520,6 +574,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_SERVER_MC_OFF));
 					SetMenu(hwnd, menu);
 					mode = MODE_SERVER;
+					Disable_Buttons(ClientButtons, ClientButtonCount);
+					Enable_Buttons(ServerButtons, ServerButtonCount);
 					InvalidateRect(hwnd, NULL, TRUE);
 				break;
 				/*
@@ -536,8 +592,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 				 *	Used for creating the dialog box that allows us to connect to a server.
 				 */
 				case IDM_CONNECT:
-					hInst = GetModuleHandle(NULL);
-					CreateDialog(hInst, MAKEINTRESOURCE(IDD_IPCONNECT), hwnd, IPConnect);
+					if (multicastFlag) {
+						SendMessage(hwnd, WM_COMMAND, MAKEWPARAM(ESTABLISH_CONNECT, ESTABLISH_CONNECT), 0);
+					} else {
+						hInst = GetModuleHandle(NULL);
+						CreateDialog(hInst, MAKEINTRESOURCE(IDD_IPCONNECT), hwnd, IPConnect);
+					}
 				break;
 				/*
 				 *	UNUSED
@@ -575,6 +635,8 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 					hInst = GetModuleHandle(NULL);
 					menu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_MAIN));
 					SetMenu(hwnd, menu);
+					Disable_Buttons(ServerButtons, ServerButtonCount);
+					Disable_Buttons(ClientButtons, ClientButtonCount);
 					if (mode == MODE_CLIENT) {
 						if (client != INVALID_SOCKET) {
 							closesocket(client);
@@ -691,6 +753,35 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT Message,
 						addr_len = sizeof(*gaddr);
 						if (multicastFlag) {
 							
+						} else if (MicFlag) {
+							flags = 0;
+							buffer.buf = dataBuffer;
+							buffer.len = DATA_BUFSIZE;
+							addr_len = sizeof(*gaddr);
+							WSARecvFrom(server, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
+							error = GetLastError();
+							if (error != 0) {
+								printf("");
+							}
+							if (bytesReceived > 0) {
+								BASS_StreamPutData(streamHandle, dataBuffer, bytesReceived);
+							}
+							if (!started && bytesReceived > 0) {
+								started = true;
+								BASS_ChannelPlay(streamHandle, FALSE);
+							}
+
+							if (initRecv) {
+								initRecv = false;
+							} else if (firstRecv) {
+								firstRecv = false;
+								if (bytesReceived > 0) {
+									pktsRecv += 1;
+								}
+							} else {
+								pktsRecv += 1;
+							}
+							totalBytesRecv += bytesReceived;
 						} else {
 							WSARecvFrom(server, &buffer, 1, &bytesReceived, &flags, (sockaddr*)gaddr, &addr_len, NULL, NULL);
 						
@@ -798,7 +889,12 @@ DWORD WINAPI SendFileThread(LPVOID n) {
 
 	char streamDataBuffer[4096];
 	HSTREAM streamBuffer;
-	streamBuffer = BASS_StreamCreateFile(FALSE, sData->songname, 0, 0, BASS_STREAM_DECODE);
+	if (micFlag) {
+		BASS_RecordInit(-1);
+		streamBuffer = BASS_RecordStart(44100, 2, 0, 0, 0);
+	} else {
+		streamBuffer = BASS_StreamCreateFile(FALSE, sData->songname, 0, 0, BASS_STREAM_DECODE);
+	}
 	//BASS_RecordInit(-1);
 	//streamBuffer = BASS_RecordStart(44100, 2, 0, 0, 0); // start recording
 	bool started = false;
@@ -891,7 +987,7 @@ long getDelay (SYSTEMTIME start, SYSTEMTIME end)
 size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonCount, 
 	size_t x, size_t y, size_t width, size_t height, LPCWSTR name, size_t buttonID) {
 	if (buttonCount < MAX_BUTTONS) {
-		(*buttons)[buttonCount] = CreateWindow ( TEXT("button"),//type of child window 
+		(*buttons)[buttonCount++] = CreateWindow ( TEXT("button"),//type of child window 
 							name,//text displayed on button
                             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,//type of button
                             x, y,
@@ -904,6 +1000,28 @@ size_t Create_Button(HWND &hwnd, LPARAM lParam, HWND ** buttons, size_t &buttonC
 	}
 
 	return BUTTON_ERROR;
+}
+
+bool Disable_Buttons(HWND * buttons, size_t buttonCount) {
+	size_t tempButtonCount = buttonCount;
+	size_t i = 0;
+
+	for (i = 0; i < tempButtonCount; i++) {
+		ShowWindow(buttons[i], SW_HIDE);
+	}
+
+	return true;
+}
+
+bool Enable_Buttons(HWND * buttons, size_t buttonCount) {
+	size_t tempButtonCount = buttonCount;
+	size_t i = 0;
+
+	for (i = 0; i < tempButtonCount; i++) {
+		ShowWindow(buttons[i], SW_SHOW);
+	}
+
+	return true;
 }
 
 void GetSongList(std::string songfile, HWND lbHwnd) {

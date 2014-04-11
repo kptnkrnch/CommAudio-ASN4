@@ -48,6 +48,9 @@
 #define BTN_PAUSE						2002 //Pause button
 #define BTN_REFRESH						2003 //Pause button
 #define BTN_STREAM						2004 //Pause button
+#define BTN_LOAD						2005 //Load a local song on client
+#define BTN_START_MIC					2006 //Starts MIC recording
+#define BTN_STOP_MIC					2007 //Stops MIC recording
 
 /*dialog box procedure prototypes*/
 BOOL CALLBACK ProtocolAndPort(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);
